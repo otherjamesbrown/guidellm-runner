@@ -1,0 +1,55 @@
+# GuideLLM Runner Configuration
+# Copy this to config.yaml and modify for your environment
+
+environments:
+  develop:
+    targets:
+      - name: llama-7b
+        url: http://dev-llm-1.internal:8000/v1/chat/completions
+        model: llama-7b
+        # Optional per-target overrides:
+        # rate: 2
+        # max_seconds: 60
+        # profile: constant
+
+      - name: mistral-7b
+        url: http://dev-llm-2.internal:8000/v1/chat/completions
+        model: mistral-7b
+
+  staging:
+    targets:
+      - name: llama-7b
+        url: http://staging-llm-1.internal:8000/v1/chat/completions
+        model: llama-7b
+        # Higher rate for staging performance validation
+        rate: 5
+
+      - name: mistral-7b
+        url: http://staging-llm-2.internal:8000/v1/chat/completions
+        model: mistral-7b
+        rate: 5
+
+# Default settings applied to all targets unless overridden
+defaults:
+  # Load profile: constant, poisson, concurrent, throughput, sweep
+  profile: constant
+
+  # Requests per second (for constant/poisson profiles)
+  rate: 1
+
+  # Seconds between benchmark runs
+  interval: 60
+
+  # Duration of each benchmark run in seconds
+  max_seconds: 30
+
+  # Max tokens to request from the LLM
+  max_tokens: 100
+
+  # Token specification for synthetic data generation
+  # Format: prompt_tokens=N,output_tokens=M
+  data_spec: "prompt_tokens=256,output_tokens=128"
+
+# Prometheus metrics server configuration
+prometheus:
+  port: 9090
