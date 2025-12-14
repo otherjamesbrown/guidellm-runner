@@ -21,9 +21,9 @@ config:
     interval: 300  # Run benchmark every 5 minutes
     maxSeconds: 60
     maxTokens: 100
-    # Use synthetic data spec for text_completions request type
-    # (JSON array format doesn't work with text_completions)
-    dataSpec: "prompt_tokens=256,output_tokens=128"
+    # Use emulated data with gpt2 tokenizer for text_completions
+    # (synthetic format needs model-specific tokenizer which may not be available)
+    dataSpec: "type=emulated,tokenizer=gpt2,prompt_tokens=256,output_tokens=128"
 
   environments:
     development:
