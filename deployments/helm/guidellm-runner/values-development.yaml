@@ -27,12 +27,12 @@ config:
     development:
       targets:
         - name: unsloth-gpt-oss-20b
-          url: https://api.dev.otherjamesbrown.com/v1/chat/completions
+          url: https://api.dev.otherjamesbrown.com
           model: unsloth/gpt-oss-20b
           rate: 1
           maxSeconds: 60
         - name: mistral-7b
-          url: https://api.dev.otherjamesbrown.com/v1/chat/completions
+          url: https://api.dev.otherjamesbrown.com
           model: mistralai/Mistral-7B-Instruct-v0.3
           rate: 1
           maxSeconds: 60
