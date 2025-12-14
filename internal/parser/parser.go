@@ -13,15 +13,53 @@ type BenchmarkReport struct {
 
 // Benchmark represents a single benchmark run
 type Benchmark struct {
-	Profile     string       `json:"profile"`
-	Rate        float64      `json:"rate"`
-	Requests    []Request    `json:"requests"`
-	Stats       *Stats       `json:"stats,omitempty"`
-	Summary     *Summary     `json:"summary,omitempty"`
-	StartTime   float64      `json:"start_time"`
-	EndTime     float64      `json:"end_time"`
-	Completed   int          `json:"completed_requests"`
-	Errored     int          `json:"errored_requests"`
+	Profile        string          `json:"profile"`
+	Rate           float64         `json:"rate"`
+	Requests       RequestsData    `json:"requests"`
+	Stats          *Stats          `json:"stats,omitempty"`
+	Summary        *Summary        `json:"summary,omitempty"`
+	SchedulerState *SchedulerState `json:"scheduler_state,omitempty"`
+	Metrics        *BenchmarkMetrics `json:"metrics,omitempty"`
+	StartTime      float64         `json:"start_time"`
+	EndTime        float64         `json:"end_time"`
+	Completed      int             `json:"completed_requests"`
+	Errored        int             `json:"errored_requests"`
+}
+
+// SchedulerState contains the request counts from guidellm's scheduler
+type SchedulerState struct {
+	CreatedRequests    int `json:"created_requests"`
+	SuccessfulRequests int `json:"successful_requests"`
+	ErroredRequests    int `json:"errored_requests"`
+	CancelledRequests  int `json:"cancelled_requests"`
+}
+
+// RequestsData contains arrays of requests by status
+type RequestsData struct {
+	Successful []Request `json:"successful"`
+	Errored    []Request `json:"errored"`
+	Incomplete []Request `json:"incomplete"`
+}
+
+// BenchmarkMetrics contains timing and throughput metrics
+type BenchmarkMetrics struct {
+	RequestThroughput *ThroughputMetrics `json:"request_throughput"`
+	TokenThroughput   *TokenThroughputMetrics `json:"token_throughput"`
+}
+
+// ThroughputMetrics contains request throughput stats
+type ThroughputMetrics struct {
+	Mean float64 `json:"mean"`
+}
+
+// TokenThroughputMetrics contains token throughput stats
+type TokenThroughputMetrics struct {
+	OutputPerSecond *MetricStats `json:"output_per_second"`
+}
+
+// MetricStats contains statistical measurements
+type MetricStats struct {
+	Mean float64 `json:"mean"`
 }
 
 // Request represents a single request's data
@@ -116,8 +154,13 @@ func Parse(data []byte) (*ParsedResults, error) {
 	}
 
 	for _, benchmark := range report.Benchmarks {
-		// Extract from summary if available
-		if benchmark.Summary != nil {
+		// Extract from scheduler_state (new guidellm format)
+		if benchmark.SchedulerState != nil {
+			results.TotalRequests += benchmark.SchedulerState.CreatedRequests
+			results.SuccessfulRequests += benchmark.SchedulerState.SuccessfulRequests
+			results.FailedRequests += benchmark.SchedulerState.ErroredRequests
+		} else if benchmark.Summary != nil {
+			// Fall back to summary if available (legacy format)
 			results.TotalRequests += benchmark.Summary.TotalRequests
 			results.SuccessfulRequests += benchmark.Summary.SuccessfulRequests
 			results.FailedRequests += benchmark.Summary.FailedRequests
@@ -126,27 +169,35 @@ func Parse(data []byte) (*ParsedResults, error) {
 			results.OutputTokensPerSec = benchmark.Summary.OutputTokensPerSec
 			results.RequestsPerSec = benchmark.Summary.RequestsPerSec
 		} else {
-			// Fall back to counting requests directly
+			// Fall back to counting requests directly (oldest format)
 			results.TotalRequests += benchmark.Completed + benchmark.Errored
 			results.SuccessfulRequests += benchmark.Completed
 			results.FailedRequests += benchmark.Errored
 		}
 
-		// Extract individual request latencies for histograms
-		for _, req := range benchmark.Requests {
-			if req.Success {
-				if req.TTFT > 0 {
-					results.TTFTValues = append(results.TTFTValues, req.TTFT)
-				}
-				if req.ITL > 0 {
-					results.ITLValues = append(results.ITLValues, req.ITL)
-				}
-				if req.E2ELatency > 0 {
-					results.E2EValues = append(results.E2EValues, req.E2ELatency)
-				}
-				results.PromptTokens += req.PromptTokens
-				results.OutputTokens += req.OutputTokens
+		// Extract throughput metrics
+		if benchmark.Metrics != nil {
+			if benchmark.Metrics.RequestThroughput != nil {
+				results.RequestsPerSec = benchmark.Metrics.RequestThroughput.Mean
 			}
+			if benchmark.Metrics.TokenThroughput != nil && benchmark.Metrics.TokenThroughput.OutputPerSecond != nil {
+				results.OutputTokensPerSec = benchmark.Metrics.TokenThroughput.OutputPerSecond.Mean
+			}
+		}
+
+		// Extract individual request latencies from successful requests
+		for _, req := range benchmark.Requests.Successful {
+			if req.TTFT > 0 {
+				results.TTFTValues = append(results.TTFTValues, req.TTFT)
+			}
+			if req.ITL > 0 {
+				results.ITLValues = append(results.ITLValues, req.ITL)
+			}
+			if req.E2ELatency > 0 {
+				results.E2EValues = append(results.E2EValues, req.E2ELatency)
+			}
+			results.PromptTokens += req.PromptTokens
+			results.OutputTokens += req.OutputTokens
 		}
 	}
 
