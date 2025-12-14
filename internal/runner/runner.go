@@ -184,6 +184,9 @@ func (r *Runner) buildArgs(target config.Target, outputDir string, apiKey string
 		// Use text_completions instead of chat_completions to avoid multimodal
 		// message format that vLLM doesn't support
 		"--request-type", "text_completions",
+		// Use gpt2 processor to avoid needing model-specific tokenizers
+		// (many models like mistral need sentencepiece which isn't installed)
+		"--processor", "gpt2",
 	}
 
 	// Build request-formatter-kwargs with:
