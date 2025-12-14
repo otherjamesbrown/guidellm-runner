@@ -109,9 +109,13 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 
 	cmd := exec.CommandContext(ctx, "guidellm", args...)
 
-	// Set API key if configured
-	if target.APIKey != "" {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("OPENAI_API_KEY=%s", target.APIKey))
+	// Set API key - prefer target config, fall back to environment
+	apiKey := target.APIKey
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+	}
+	if apiKey != "" {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("OPENAI_API_KEY=%s", apiKey))
 	}
 
 	// Capture output for debugging
