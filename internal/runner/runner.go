@@ -181,14 +181,19 @@ func (r *Runner) buildArgs(target config.Target, outputDir string, apiKey string
 		"--output-dir", outputDir,
 		"--outputs", "json",
 		"--backend-kwargs", `{"validate_backend": false}`,
+		// Use text_completions instead of chat_completions to avoid multimodal
+		// message format that vLLM doesn't support
+		"--request-type", "text_completions",
 	}
 
-	// Inject Authorization header if API key is provided
-	// guidellm does NOT read OPENAI_API_KEY environment variable, so we must
-	// inject the header explicitly via request-formatter-kwargs
+	// Build request-formatter-kwargs with:
+	// - stream: false (streaming causes 502 errors with vLLM)
+	// - Authorization header (guidellm doesn't read OPENAI_API_KEY env var)
 	if apiKey != "" {
-		formatterKwargs := fmt.Sprintf(`{"extras": {"headers": {"Authorization": "Bearer %s"}}}`, apiKey)
+		formatterKwargs := fmt.Sprintf(`{"stream": false, "extras": {"headers": {"Authorization": "Bearer %s"}}}`, apiKey)
 		args = append(args, "--request-formatter-kwargs", formatterKwargs)
+	} else {
+		args = append(args, "--request-formatter-kwargs", `{"stream": false}`)
 	}
 
 	return args
