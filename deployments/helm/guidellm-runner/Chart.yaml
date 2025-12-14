@@ -1,0 +1,13 @@
+apiVersion: v2
+name: guidellm-runner
+description: GuideLLM benchmark runner for continuous LLM performance monitoring
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - llm
+  - benchmark
+  - monitoring
+  - prometheus
+maintainers:
+  - name: AI-AAS Platform Team

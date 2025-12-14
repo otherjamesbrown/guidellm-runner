@@ -1,0 +1,64 @@
+# Development environment values for guidellm-runner
+
+image:
+  repository: ghcr.io/otherjamesbrown/ai-aas/guidellm-runner
+  tag: "dev"
+  pullPolicy: Always
+  pullSecrets:
+    - ghcr-pull-secret
+
+# Use existing secret for API key
+apiKey:
+  existingSecret: "guidellm-runner-api-key"
+  existingSecretKey: "api-key"
+
+config:
+  logLevel: info
+
+  defaults:
+    profile: constant
+    rate: 1
+    interval: 300  # Run benchmark every 5 minutes
+    maxSeconds: 60
+    maxTokens: 100
+    dataSpec: '["What is artificial intelligence?", "Explain machine learning", "What is the capital of France?", "Write a short poem about clouds"]'
+
+  environments:
+    development:
+      targets:
+        - name: unsloth-gpt-oss-20b
+          url: https://api.dev.otherjamesbrown.com/v1/chat/completions
+          model: unsloth/gpt-oss-20b
+          rate: 1
+          maxSeconds: 60
+        - name: mistral-7b
+          url: https://api.dev.otherjamesbrown.com/v1/chat/completions
+          model: mistralai/Mistral-7B-Instruct-v0.3
+          rate: 1
+          maxSeconds: 60
+
+resources:
+  limits:
+    cpu: "2"
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: kube-prometheus-stack
+
+# Prefer CPU nodes (avoid GPU nodes)
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: lke.linode.com/pool-id
+              operator: In
+              values:
+                - "770211"  # CPU node pool

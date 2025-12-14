@@ -1,0 +1,81 @@
+# Default values for guidellm-runner
+
+replicaCount: 1
+
+image:
+  repository: guidellm-runner
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP
+  port: 9090
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# ServiceMonitor for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+  labels:
+    release: kube-prometheus-stack
+
+# GuideLLM Runner configuration
+config:
+  # Log level: debug, info, warn, error
+  logLevel: info
+
+  # Prometheus metrics port
+  prometheusPort: 9090
+
+  # Default benchmark settings
+  defaults:
+    profile: constant
+    rate: 1
+    interval: 300  # 5 minutes between benchmark runs
+    maxSeconds: 60
+    maxTokens: 100
+    dataSpec: "prompt_tokens=100,output_tokens=50"
+
+  # Environments and targets (override in values-<env>.yaml)
+  environments: {}
+
+# API Key configuration
+apiKey:
+  # Use existing secret
+  existingSecret: ""
+  existingSecretKey: "api-key"
+  # Or create new secret with this value (not recommended for production)
+  value: ""

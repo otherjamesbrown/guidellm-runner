@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "guidellm-runner.fullname" . }}-config
+  labels:
+    {{- include "guidellm-runner.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # GuideLLM Runner Configuration
+    # Auto-generated from Helm values
+
+    environments:
+      {{- range $envName, $env := .Values.config.environments }}
+      {{ $envName }}:
+        targets:
+          {{- range $env.targets }}
+          - name: {{ .name }}
+            url: {{ .url }}
+            model: {{ .model }}
+            {{- if .rate }}
+            rate: {{ .rate }}
+            {{- end }}
+            {{- if .maxSeconds }}
+            max_seconds: {{ .maxSeconds }}
+            {{- end }}
+          {{- end }}
+      {{- end }}
+
+    defaults:
+      profile: {{ .Values.config.defaults.profile }}
+      rate: {{ .Values.config.defaults.rate }}
+      interval: {{ .Values.config.defaults.interval }}
+      max_seconds: {{ .Values.config.defaults.maxSeconds }}
+      max_tokens: {{ .Values.config.defaults.maxTokens }}
+      data_spec: {{ .Values.config.defaults.dataSpec | quote }}
+
+    prometheus:
+      port: {{ .Values.config.prometheusPort }}

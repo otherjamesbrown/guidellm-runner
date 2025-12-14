@@ -138,11 +138,31 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 	r.updateMetrics(labels, results)
 	metrics.LastBenchmarkTimestamp.With(labels).SetToCurrentTime()
 
-	logger.Info("benchmark completed",
-		"requests", results.TotalRequests,
-		"successful", results.SuccessfulRequests,
-		"failed", results.FailedRequests,
-		"tokens_per_sec", results.OutputTokensPerSec)
+	// Log at appropriate level based on results
+	if results.TotalRequests == 0 {
+		// Zero requests indicates a silent failure - likely validation or connection issue
+		logger.Error("benchmark completed with ZERO requests - possible validation failure",
+			"requests", results.TotalRequests,
+			"successful", results.SuccessfulRequests,
+			"failed", results.FailedRequests,
+			"url", target.URL,
+			"model", target.Model,
+			"hint", "Check if the target URL is reachable and authentication is configured correctly")
+		metrics.BenchmarkRunsFailed.With(labels).Inc()
+	} else if results.FailedRequests > 0 && results.SuccessfulRequests == 0 {
+		// All requests failed
+		logger.Error("benchmark completed with all requests failed",
+			"requests", results.TotalRequests,
+			"successful", results.SuccessfulRequests,
+			"failed", results.FailedRequests,
+			"tokens_per_sec", results.OutputTokensPerSec)
+	} else {
+		logger.Info("benchmark completed",
+			"requests", results.TotalRequests,
+			"successful", results.SuccessfulRequests,
+			"failed", results.FailedRequests,
+			"tokens_per_sec", results.OutputTokensPerSec)
+	}
 }
 
 // buildArgs constructs the GuideLLM CLI arguments
@@ -150,12 +170,14 @@ func (r *Runner) buildArgs(target config.Target, outputDir string) []string {
 	args := []string{
 		"benchmark",
 		"--target", target.URL,
+		"--model", target.Model,
 		"--profile", target.GetProfile(r.cfg.Defaults),
 		"--rate", fmt.Sprintf("%d", target.GetRate(r.cfg.Defaults)),
 		"--max-seconds", fmt.Sprintf("%d", target.GetMaxSeconds(r.cfg.Defaults)),
 		"--data", r.cfg.Defaults.DataSpec,
 		"--output-dir", outputDir,
-		"--output", "json",
+		"--outputs", "json",
+		"--backend-kwargs", `{"validate_backend": false}`,
 	}
 
 	return args
