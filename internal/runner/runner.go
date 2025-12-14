@@ -103,20 +103,19 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 
 	outputFile := filepath.Join(tmpDir, "benchmarks.json")
 
-	// Build GuideLLM command
-	args := r.buildArgs(target, tmpDir)
-	logger.Debug("running guidellm", "args", args)
-
-	cmd := exec.CommandContext(ctx, "guidellm", args...)
-
-	// Set API key - prefer target config, fall back to environment
+	// Get API key - prefer target config, fall back to environment
 	apiKey := target.APIKey
 	if apiKey == "" {
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
-	if apiKey != "" {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("OPENAI_API_KEY=%s", apiKey))
-	}
+
+	// Build GuideLLM command with API key injected into headers
+	// Note: guidellm does NOT read OPENAI_API_KEY from environment, so we
+	// must inject it via --request-formatter-kwargs
+	args := r.buildArgs(target, tmpDir, apiKey)
+	logger.Debug("running guidellm", "args", args)
+
+	cmd := exec.CommandContext(ctx, "guidellm", args...)
 
 	// Capture output for debugging
 	output, err := cmd.CombinedOutput()
@@ -170,7 +169,7 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 }
 
 // buildArgs constructs the GuideLLM CLI arguments
-func (r *Runner) buildArgs(target config.Target, outputDir string) []string {
+func (r *Runner) buildArgs(target config.Target, outputDir string, apiKey string) []string {
 	args := []string{
 		"benchmark",
 		"--target", target.URL,
@@ -182,6 +181,14 @@ func (r *Runner) buildArgs(target config.Target, outputDir string) []string {
 		"--output-dir", outputDir,
 		"--outputs", "json",
 		"--backend-kwargs", `{"validate_backend": false}`,
+	}
+
+	// Inject Authorization header if API key is provided
+	// guidellm does NOT read OPENAI_API_KEY environment variable, so we must
+	// inject the header explicitly via request-formatter-kwargs
+	if apiKey != "" {
+		formatterKwargs := fmt.Sprintf(`{"extras": {"headers": {"Authorization": "Bearer %s"}}}`, apiKey)
+		args = append(args, "--request-formatter-kwargs", formatterKwargs)
 	}
 
 	return args
