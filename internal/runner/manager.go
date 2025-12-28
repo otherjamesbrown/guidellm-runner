@@ -164,7 +164,9 @@ func (m *DefaultTargetManager) StartTarget(ctx context.Context, name string) err
 	}
 
 	// Create cancellable context for this target
-	targetCtx, cancel := context.WithCancel(ctx)
+	// Use Background() instead of the HTTP request context to avoid
+	// cancellation when the API request completes
+	targetCtx, cancel := context.WithCancel(context.Background())
 	mt.cancel = cancel
 	mt.status = api.TargetStatusRunning
 	m.mu.Unlock()
