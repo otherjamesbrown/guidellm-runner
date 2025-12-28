@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/yourorg/guidellm-runner/internal/api"
 	"github.com/yourorg/guidellm-runner/internal/config"
 	"github.com/yourorg/guidellm-runner/internal/runner"
 )
@@ -19,6 +21,8 @@ func main() {
 	// Parse flags
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
+	apiPort := flag.Int("api-port", 8080, "Port for the runtime control API")
+	autoStart := flag.Bool("auto-start", true, "Automatically start configured targets on startup")
 	flag.Parse()
 
 	// Setup logger
@@ -51,7 +55,8 @@ func main() {
 	logger.Info("configuration loaded",
 		"environments", len(cfg.Environments),
 		"total_targets", totalTargets,
-		"prometheus_port", cfg.Prometheus.Port)
+		"prometheus_port", cfg.Prometheus.Port,
+		"api_port", *apiPort)
 
 	// Setup context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -60,11 +65,16 @@ func main() {
 	// Handle shutdown signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigChan
-		logger.Info("received shutdown signal", "signal", sig)
-		cancel()
-	}()
+
+	// Create target manager
+	manager := runner.NewTargetManager(cfg, logger)
+
+	// Create runner with manager reference
+	r := runner.New(cfg, logger)
+	manager.SetRunner(r)
+
+	// Load targets from config
+	manager.LoadFromConfig()
 
 	// Start Prometheus metrics server
 	go func() {
@@ -80,12 +90,44 @@ func main() {
 		}
 	}()
 
-	// Start runner
-	r := runner.New(cfg, logger)
-	if err := r.Start(ctx); err != nil {
-		logger.Error("runner failed", "error", err)
-		os.Exit(1)
+	// Start API server
+	apiServer := api.NewServer(api.ServerConfig{
+		Port:   *apiPort,
+		Logger: logger,
+	}, manager)
+
+	go func() {
+		if err := apiServer.Start(); err != nil {
+			logger.Error("API server failed", "error", err)
+		}
+	}()
+
+	// Auto-start configured targets if enabled
+	if *autoStart && totalTargets > 0 {
+		logger.Info("auto-starting configured targets", "count", totalTargets)
+		manager.StartAllConfigured(ctx)
 	}
+
+	// Wait for shutdown signal
+	sig := <-sigChan
+	logger.Info("received shutdown signal", "signal", sig)
+	cancel()
+
+	// Graceful shutdown
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	// Stop API server
+	if err := apiServer.Shutdown(shutdownCtx); err != nil {
+		logger.Error("API server shutdown failed", "error", err)
+	}
+
+	// Stop all targets
+	manager.StopAll()
+
+	// Wait for all benchmark runs to complete
+	logger.Info("waiting for benchmark runs to complete")
+	manager.Wait()
 
 	logger.Info("shutdown complete")
 }

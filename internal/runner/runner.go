@@ -87,8 +87,13 @@ func (r *Runner) runTargetLoop(ctx context.Context, envName string, target confi
 	}
 }
 
-// runBenchmark executes a single GuideLLM benchmark run
+// runBenchmark executes a single GuideLLM benchmark run (backwards compatible)
 func (r *Runner) runBenchmark(ctx context.Context, envName string, target config.Target, logger *slog.Logger) {
+	r.runBenchmarkWithResults(ctx, envName, target, logger)
+}
+
+// runBenchmarkWithResults executes a single GuideLLM benchmark run and returns results
+func (r *Runner) runBenchmarkWithResults(ctx context.Context, envName string, target config.Target, logger *slog.Logger) *parser.ParsedResults {
 	labels := metrics.Labels(envName, target.Name, target.Model)
 	metrics.BenchmarkRunsTotal.With(labels).Inc()
 
@@ -97,7 +102,7 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 	if err != nil {
 		logger.Error("failed to create temp directory", "error", err)
 		metrics.BenchmarkRunsFailed.With(labels).Inc()
-		return
+		return nil
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -124,7 +129,7 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 			"error", err,
 			"output", string(output))
 		metrics.BenchmarkRunsFailed.With(labels).Inc()
-		return
+		return nil
 	}
 
 	logger.Debug("guidellm completed", "output_length", len(output))
@@ -134,7 +139,7 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 	if err != nil {
 		logger.Error("failed to parse results", "error", err)
 		metrics.BenchmarkRunsFailed.With(labels).Inc()
-		return
+		return nil
 	}
 
 	// Update Prometheus metrics
@@ -166,6 +171,8 @@ func (r *Runner) runBenchmark(ctx context.Context, envName string, target config
 			"failed", results.FailedRequests,
 			"tokens_per_sec", results.OutputTokensPerSec)
 	}
+
+	return results
 }
 
 // buildArgs constructs the GuideLLM CLI arguments
@@ -181,9 +188,7 @@ func (r *Runner) buildArgs(target config.Target, outputDir string, apiKey string
 		"--output-dir", outputDir,
 		"--outputs", "json",
 		"--backend-kwargs", `{"validate_backend": false}`,
-		// Use text_completions instead of chat_completions to avoid multimodal
-		// message format that vLLM doesn't support
-		"--request-type", "text_completions",
+		"--request-type", target.GetRequestType(r.cfg.Defaults),
 		// Use gpt2 processor to avoid needing model-specific tokenizers
 		// (many models like mistral need sentencepiece which isn't installed)
 		"--processor", "gpt2",
