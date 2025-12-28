@@ -1,4 +1,4 @@
-# Development environment values for guidellm-runner
+# Staging environment values for guidellm-runner
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/guidellm-runner
@@ -7,7 +7,7 @@ image:
   pullSecrets:
     - ghcr-pull-secret
 
-# Use existing secret for API key
+# Use dedicated API key secret for benchmarking
 apiKey:
   existingSecret: "guidellm-runner-api-key"
   existingSecretKey: "api-key"
@@ -22,25 +22,25 @@ config:
     maxSeconds: 60
     maxTokens: 100
     # Use emulated data with gpt2 tokenizer for text_completions
-    # (synthetic format needs model-specific tokenizer which may not be available)
     dataSpec: "type=emulated,tokenizer=gpt2,prompt_tokens=256,output_tokens=128"
 
   environments:
-    development:
+    staging:
       targets:
         - name: unsloth-gpt-oss-20b
-          url: https://api.dev.otherjamesbrown.com
+          # Use internal cluster DNS for better reliability
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
           model: unsloth/gpt-oss-20b
           rate: 1
           maxSeconds: 60
-        - name: mistral-7b
-          url: https://api.dev.otherjamesbrown.com
-          model: mistralai/Mistral-7B-Instruct-v0.3
+        - name: openai-gpt-oss-20b
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: openai/gpt-oss-20b
           rate: 1
           maxSeconds: 60
-        - name: openai-gpt-oss-20b
-          url: https://api.dev.otherjamesbrown.com
-          model: openai/gpt-oss-20b
+        - name: mistral-7b
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: mistralai/Mistral-7B-Instruct-v0.3
           rate: 1
           maxSeconds: 60
 
@@ -66,6 +66,7 @@ affinity:
         preference:
           matchExpressions:
             - key: lke.linode.com/pool-id
-              operator: In
+              operator: NotIn
               values:
-                - "770211"  # CPU node pool
+                - "785977"  # GPU node pool
+                - "785978"  # GPU node pool

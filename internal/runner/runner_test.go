@@ -1,14 +1,11 @@
 package runner
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yourorg/guidellm-runner/internal/config"
 )
@@ -100,66 +97,37 @@ func TestAPIKeyHandling(t *testing.T) {
 			// Create a mock command to inspect the environment
 			// We'll use 'env' command to print environment variables
 			tmpDir := t.TempDir()
-			args := runner.buildArgs(target, tmpDir)
-
-			// Create the command (we won't actually run guidellm, but we'll inspect the env setup)
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-
-			cmd := exec.CommandContext(ctx, "env") // Use 'env' to print environment
 
 			// Apply the same API key logic as runBenchmark
 			apiKey := target.APIKey
 			if apiKey == "" {
 				apiKey = os.Getenv("OPENAI_API_KEY")
 			}
-			if apiKey != "" {
-				cmd.Env = append(os.Environ(), fmt.Sprintf("OPENAI_API_KEY=%s", apiKey))
-			} else {
-				cmd.Env = os.Environ()
-			}
 
-			// Run the env command to capture the environment
-			output, err := cmd.CombinedOutput()
-			if err != nil && !strings.Contains(err.Error(), "deadline exceeded") {
-				t.Fatalf("Failed to run env command: %v", err)
-			}
+			args := runner.buildArgs(target, tmpDir, apiKey)
 
-			// Verify the OPENAI_API_KEY in the command environment
-			envLines := strings.Split(string(output), "\n")
-			var foundKey string
-			for _, line := range envLines {
-				if strings.HasPrefix(line, "OPENAI_API_KEY=") {
-					foundKey = strings.TrimPrefix(line, "OPENAI_API_KEY=")
-					break
-				}
-			}
+			// Verify that API key is correctly included in request-formatter-kwargs
+			// The implementation now passes API key via Authorization header in request-formatter-kwargs
+			argsStr := strings.Join(args, " ")
 
-			// Check if the key matches expectations
-			if tt.expectedKey == "" {
-				// We should still find OPENAI_API_KEY in env if it was set in the parent env
-				// But we don't explicitly set it in cmd.Env
-				if tt.envAPIKey == "" && foundKey != "" && foundKey != originalEnv {
-					t.Errorf("Expected no API key to be explicitly set, but found: %s", foundKey)
+			if tt.expectedKey != "" {
+				// When API key is set, it should appear in request-formatter-kwargs
+				expectedHeader := fmt.Sprintf(`"Authorization": "Bearer %s"`, tt.expectedKey)
+				if !strings.Contains(argsStr, expectedHeader) {
+					t.Errorf("Expected API key in request-formatter-kwargs with header %s, but not found in args: %v", expectedHeader, args)
 				}
 			} else {
-				if foundKey != tt.expectedKey {
-					t.Errorf("Expected OPENAI_API_KEY=%s, but got: %s", tt.expectedKey, foundKey)
-				}
-			}
-
-			// Verify that buildArgs doesn't include API key (it should be env-only)
-			for _, arg := range args {
-				if strings.Contains(arg, "api") && strings.Contains(arg, "key") {
-					t.Errorf("API key should not be in command args, found: %s", arg)
+				// When no API key, request-formatter-kwargs should just have stream: false
+				if strings.Contains(argsStr, "Authorization") {
+					t.Errorf("Expected no Authorization header when API key is empty, but found in args: %v", args)
 				}
 			}
 		})
 	}
 }
 
-// TestAPIKeyNotInCommandArgs verifies that the API key is never passed as a command-line argument
-func TestAPIKeyNotInCommandArgs(t *testing.T) {
+// TestAPIKeyInAuthHeader verifies that the API key is passed via Authorization header in request-formatter-kwargs
+func TestAPIKeyInAuthHeader(t *testing.T) {
 	cfg := &config.Config{
 		Environments: map[string]config.Environment{
 			"test": {
@@ -189,32 +157,38 @@ func TestAPIKeyNotInCommandArgs(t *testing.T) {
 	target := cfg.Environments["test"].Targets[0]
 	tmpDir := t.TempDir()
 
-	args := runner.buildArgs(target, tmpDir)
+	args := runner.buildArgs(target, tmpDir, target.APIKey)
 
 	// Convert args to string for easier inspection
 	argsStr := strings.Join(args, " ")
 
-	// Verify the API key is NOT in the arguments
-	if strings.Contains(argsStr, target.APIKey) {
-		t.Errorf("API key should not appear in command arguments. Args: %v", args)
+	// Verify the API key IS in the arguments via Authorization header
+	expectedHeader := fmt.Sprintf(`"Authorization": "Bearer %s"`, target.APIKey)
+	if !strings.Contains(argsStr, expectedHeader) {
+		t.Errorf("API key should appear in Authorization header. Expected %s in args: %v", expectedHeader, args)
 	}
 
 	// Verify we have the expected guidellm arguments
-	expectedArgs := []string{
+	expectedFlags := []string{
 		"benchmark",
-		"--target", target.URL,
-		"--model", target.Model,
-		"--profile", "constant",
-		"--rate", "1",
-		"--max-seconds", "1",
-		"--data", "prompt_tokens=10,output_tokens=10",
-		"--output-dir", tmpDir,
-		"--outputs", "json",
-		"--backend-kwargs", `{"validate_backend": false}`,
+		"--target",
+		"--model",
+		"--profile",
+		"--rate",
+		"--max-seconds",
+		"--data",
+		"--output-dir",
+		"--outputs",
+		"--backend-kwargs",
+		"--request-type",
+		"--processor",
+		"--request-formatter-kwargs",
 	}
 
-	if len(args) != len(expectedArgs) {
-		t.Errorf("Expected %d args, got %d", len(expectedArgs), len(args))
+	for _, flag := range expectedFlags {
+		if !strings.Contains(argsStr, flag) {
+			t.Errorf("Expected flag %s in args: %v", flag, args)
+		}
 	}
 }
 
@@ -279,7 +253,7 @@ func TestBuildArgsWithDefaults(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			args := runner.buildArgs(tt.target, tmpDir)
+			args := runner.buildArgs(tt.target, tmpDir, "") // empty apiKey for these tests
 
 			// Convert args to map for easier checking
 			argsMap := make(map[string]string)
@@ -315,6 +289,83 @@ func TestBuildArgsWithDefaults(t *testing.T) {
 			expectedKwargs := `{"validate_backend": false}`
 			if argsMap["--backend-kwargs"] != expectedKwargs {
 				t.Errorf("Expected --backend-kwargs=%s, got %s", expectedKwargs, argsMap["--backend-kwargs"])
+			}
+		})
+	}
+}
+
+// TestRequestTypeConfiguration verifies that request type is correctly configured
+func TestRequestTypeConfiguration(t *testing.T) {
+	tests := []struct {
+		name                string
+		defaultRequestType  string
+		targetRequestType   string
+		expectedRequestType string
+	}{
+		{
+			name:                "uses default text_completions when not specified",
+			defaultRequestType:  "",
+			targetRequestType:   "",
+			expectedRequestType: "text_completions",
+		},
+		{
+			name:                "uses target override when specified",
+			defaultRequestType:  "chat_completions",
+			targetRequestType:   "text_completions",
+			expectedRequestType: "text_completions",
+		},
+		{
+			name:                "uses default when target not specified",
+			defaultRequestType:  "text_completions",
+			targetRequestType:   "",
+			expectedRequestType: "text_completions",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				Defaults: config.Defaults{
+					Profile:     "constant",
+					Rate:        1,
+					MaxSeconds:  1,
+					DataSpec:    "prompt_tokens=10,output_tokens=10",
+					RequestType: tt.defaultRequestType,
+				},
+			}
+
+			// Apply default if not set (mimics Load behavior)
+			if cfg.Defaults.RequestType == "" {
+				cfg.Defaults.RequestType = "text_completions"
+			}
+
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+				Level: slog.LevelError,
+			}))
+
+			runner := New(cfg, logger)
+
+			target := config.Target{
+				Name:        "test-target",
+				URL:         "http://test.local/v1/chat/completions",
+				Model:       "test-model",
+				RequestType: tt.targetRequestType,
+			}
+
+			tmpDir := t.TempDir()
+			args := runner.buildArgs(target, tmpDir, "")
+
+			// Find the request-type value in args
+			var actualRequestType string
+			for i, arg := range args {
+				if arg == "--request-type" && i+1 < len(args) {
+					actualRequestType = args[i+1]
+					break
+				}
+			}
+
+			if actualRequestType != tt.expectedRequestType {
+				t.Errorf("Expected request type %s, got %s", tt.expectedRequestType, actualRequestType)
 			}
 		})
 	}

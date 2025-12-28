@@ -28,19 +28,21 @@ type Target struct {
 	APIKey    string `yaml:"api_key,omitempty"`
 
 	// Per-target overrides (optional)
-	Profile    string `yaml:"profile,omitempty"`
-	Rate       *int   `yaml:"rate,omitempty"`
-	MaxSeconds *int   `yaml:"max_seconds,omitempty"`
+	Profile     string `yaml:"profile,omitempty"`
+	Rate        *int   `yaml:"rate,omitempty"`
+	MaxSeconds  *int   `yaml:"max_seconds,omitempty"`
+	RequestType string `yaml:"request_type,omitempty"` // chat_completions or text_completions
 }
 
 // Defaults contains default benchmark settings
 type Defaults struct {
-	Profile    string `yaml:"profile"`
-	Rate       int    `yaml:"rate"`
-	Interval   int    `yaml:"interval"`    // seconds between benchmark runs
-	MaxSeconds int    `yaml:"max_seconds"` // duration per run
-	MaxTokens  int    `yaml:"max_tokens"`
-	DataSpec   string `yaml:"data_spec"`   // e.g., "prompt_tokens=256,output_tokens=128"
+	Profile     string `yaml:"profile"`
+	Rate        int    `yaml:"rate"`
+	Interval    int    `yaml:"interval"`     // seconds between benchmark runs
+	MaxSeconds  int    `yaml:"max_seconds"`  // duration per run
+	MaxTokens   int    `yaml:"max_tokens"`
+	DataSpec    string `yaml:"data_spec"`    // e.g., "prompt_tokens=256,output_tokens=128"
+	RequestType string `yaml:"request_type"` // chat_completions or text_completions
 }
 
 // PrometheusConfig contains Prometheus exporter settings
@@ -79,6 +81,11 @@ func Load(path string) (*Config, error) {
 	if cfg.Defaults.DataSpec == "" {
 		cfg.Defaults.DataSpec = "prompt_tokens=256,output_tokens=128"
 	}
+	if cfg.Defaults.RequestType == "" {
+		// Use text_completions because guidellm's chat_completions formatter
+		// uses multimodal content format that vLLM doesn't support
+		cfg.Defaults.RequestType = "text_completions"
+	}
 	if cfg.Prometheus.Port == 0 {
 		cfg.Prometheus.Port = 9090
 	}
@@ -113,4 +120,12 @@ func (t *Target) GetProfile(defaults Defaults) string {
 		return t.Profile
 	}
 	return defaults.Profile
+}
+
+// GetRequestType returns the effective request type for a target
+func (t *Target) GetRequestType(defaults Defaults) string {
+	if t.RequestType != "" {
+		return t.RequestType
+	}
+	return defaults.RequestType
 }

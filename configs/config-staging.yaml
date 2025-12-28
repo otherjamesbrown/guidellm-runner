@@ -1,0 +1,47 @@
+# GuideLLM Runner Configuration for ai-aas staging environment
+
+environments:
+  staging:
+    targets:
+      - name: unsloth-gpt-oss-20b
+        url: https://api.staging.otherjamesbrown.com/v1/chat/completions
+        model: unsloth/gpt-oss-20b
+        api_key: ai-aas_omiFoO9a_omiFoO9aoda1_3RMMZT1kglJ7KFosxaHap2DS-Uffdc
+        rate: 1
+        max_seconds: 30
+      - name: openai-gpt-oss-20b
+        url: https://api.staging.otherjamesbrown.com/v1/chat/completions
+        model: openai/gpt-oss-20b
+        api_key: ai-aas_omiFoO9a_omiFoO9aoda1_3RMMZT1kglJ7KFosxaHap2DS-Uffdc
+        rate: 1
+        max_seconds: 30
+      - name: mistral-7b
+        url: https://api.staging.otherjamesbrown.com/v1/chat/completions
+        model: mistralai/Mistral-7B-Instruct-v0.3
+        api_key: ai-aas_omiFoO9a_omiFoO9aoda1_3RMMZT1kglJ7KFosxaHap2DS-Uffdc
+        rate: 1
+        max_seconds: 30
+
+# Default settings applied to all targets unless overridden
+defaults:
+  # Load profile: constant, poisson, concurrent, throughput, sweep
+  profile: constant
+
+  # Requests per second (for constant/poisson profiles)
+  rate: 1
+
+  # Seconds between benchmark runs
+  interval: 60
+
+  # Duration of each benchmark run in seconds
+  max_seconds: 30
+
+  # Max tokens to request from the LLM
+  max_tokens: 100
+
+  # Token specification for synthetic data generation
+  data_spec: "type=emulated,tokenizer=gpt2,prompt_tokens=256,output_tokens=128"
+
+# Prometheus metrics server configuration
+prometheus:
+  port: 9090

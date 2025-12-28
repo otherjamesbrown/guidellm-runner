@@ -44,6 +44,10 @@ spec:
             - "/app/configs/config.yaml"
             - "-log-level"
             - "{{ .Values.config.logLevel }}"
+            {{- if .Values.api.enabled }}
+            - "-api-port"
+            - "{{ .Values.api.port }}"
+            {{- end }}
           env:
             - name: OPENAI_API_KEY
               valueFrom:
@@ -62,6 +66,11 @@ spec:
             - name: metrics
               containerPort: {{ .Values.config.prometheusPort }}
               protocol: TCP
+            {{- if .Values.api.enabled }}
+            - name: api
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /health

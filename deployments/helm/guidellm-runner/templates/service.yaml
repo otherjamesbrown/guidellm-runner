@@ -11,5 +11,11 @@ spec:
       targetPort: metrics
       protocol: TCP
       name: metrics
+    {{- if .Values.api.enabled }}
+    - port: {{ .Values.api.port }}
+      targetPort: api
+      protocol: TCP
+      name: api
+    {{- end }}
   selector:
     {{- include "guidellm-runner.selectorLabels" . | nindent 4 }}

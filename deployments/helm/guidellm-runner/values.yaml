@@ -44,6 +44,11 @@ tolerations: []
 
 affinity: {}
 
+# Runtime API configuration
+api:
+  enabled: true
+  port: 8080
+
 # ServiceMonitor for Prometheus Operator
 serviceMonitor:
   enabled: true
