@@ -46,7 +46,7 @@ func NewServer(cfg ServerConfig, manager TargetManager) *Server {
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 15 * time.Minute, // Benchmarks can take several minutes
 		IdleTimeout:  60 * time.Second,
 	}
 
