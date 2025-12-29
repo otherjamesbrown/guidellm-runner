@@ -25,7 +25,7 @@ func main() {
 	autoStart := flag.Bool("auto-start", true, "Automatically start configured targets on startup")
 	flag.Parse()
 
-	// Setup logger
+	// Setup logger with JSON format for Loki/observability compatibility
 	var level slog.Level
 	switch *logLevel {
 	case "debug":
@@ -37,7 +37,12 @@ func main() {
 	default:
 		level = slog.LevelInfo
 	}
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	// Use JSON handler for structured logging (compatible with Loki)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: level,
+		// Add source location for debugging
+		AddSource: level == slog.LevelDebug,
+	})).With("service", "guidellm-runner")
 
 	// Load configuration
 	cfg, err := config.Load(*configPath)

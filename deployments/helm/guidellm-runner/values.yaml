@@ -16,7 +16,12 @@ serviceAccount:
   annotations: {}
   name: ""
 
-podAnnotations: {}
+# Pod annotations for observability
+podAnnotations:
+  # Enable Loki log scraping via Promtail
+  promtail.io/scrape: "true"
+  # Parse JSON logs
+  promtail.io/parser: "json"
 
 podSecurityContext: {}
 
