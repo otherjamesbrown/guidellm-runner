@@ -75,3 +75,18 @@ type TargetActionResponse struct {
 	Status  TargetStatus `json:"status"`
 	Message string       `json:"message,omitempty"`
 }
+
+// TriggerRunRequest is the request body for triggering a manual benchmark run
+type TriggerRunRequest struct {
+	RunID           string                 `json:"run_id"`
+	ConfigOverrides map[string]interface{} `json:"config_overrides,omitempty"`
+}
+
+// TriggerRunResponse is the response for a triggered benchmark run
+type TriggerRunResponse struct {
+	Name    string                 `json:"name"`
+	RunID   string                 `json:"run_id"`
+	Status  string                 `json:"status"`
+	Results *parser.ParsedResults  `json:"results,omitempty"`
+	Error   string                 `json:"error,omitempty"`
+}

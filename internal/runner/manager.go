@@ -26,6 +26,9 @@ type TargetManager interface {
 	// StopTarget stops benchmarking for a target
 	StopTarget(name string) error
 
+	// TriggerRun triggers an immediate benchmark run for a target
+	TriggerRun(ctx context.Context, name string, runID string) (*parser.ParsedResults, error)
+
 	// ListTargets returns all registered targets
 	ListTargets() []api.TargetResponse
 
@@ -264,6 +267,57 @@ func (m *DefaultTargetManager) GetLatestResults(name string) (*parser.ParsedResu
 	}
 
 	return mt.lastResults, mt.lastResults != nil
+}
+
+// TriggerRun triggers an immediate benchmark run for a target
+// This runs synchronously and returns the results when complete
+func (m *DefaultTargetManager) TriggerRun(ctx context.Context, name string, runID string) (*parser.ParsedResults, error) {
+	m.mu.RLock()
+	mt, exists := m.targets[name]
+	if !exists {
+		m.mu.RUnlock()
+		return nil, fmt.Errorf("target %q not found", name)
+	}
+	target := mt.target
+	envName := mt.environment
+	m.mu.RUnlock()
+
+	if m.runner == nil {
+		return nil, fmt.Errorf("runner not initialized")
+	}
+
+	logger := m.logger.With(
+		"environment", envName,
+		"target", name,
+		"model", target.Model,
+		"run_id", runID,
+		"trigger", "manual",
+	)
+
+	logger.Info("triggering manual benchmark run")
+
+	// Run the benchmark synchronously
+	results := m.runner.runBenchmarkWithResults(ctx, envName, target, logger)
+
+	// Update last run time and results
+	m.mu.Lock()
+	if mt, exists := m.targets[name]; exists {
+		now := time.Now()
+		mt.lastRunAt = &now
+		mt.lastResults = results
+	}
+	m.mu.Unlock()
+
+	if results == nil {
+		return nil, fmt.Errorf("benchmark produced no results")
+	}
+
+	logger.Info("manual benchmark run completed",
+		"requests", results.TotalRequests,
+		"successful", results.SuccessfulRequests,
+		"failed", results.FailedRequests)
+
+	return results, nil
 }
 
 // LoadFromConfig loads targets from configuration (for backwards compatibility)

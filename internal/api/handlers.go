@@ -16,6 +16,7 @@ type TargetManager interface {
 	RemoveTarget(name string) error
 	StartTarget(ctx context.Context, name string) error
 	StopTarget(name string) error
+	TriggerRun(ctx context.Context, name string, runID string) (*parser.ParsedResults, error)
 	ListTargets() []TargetResponse
 	GetTarget(name string) (*TargetResponse, bool)
 	GetStatus() StatusResponse
@@ -177,6 +178,49 @@ func (h *Handlers) GetTargetResults(w http.ResponseWriter, r *http.Request) {
 	h.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"name":    name,
 		"results": results,
+	})
+}
+
+// TriggerRun handles POST /api/targets/{name}/trigger
+func (h *Handlers) TriggerRun(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" {
+		h.respondError(w, http.StatusBadRequest, "target name is required", "")
+		return
+	}
+
+	// Check if target exists
+	if _, ok := h.manager.GetTarget(name); !ok {
+		h.respondError(w, http.StatusNotFound, "target not found", "")
+		return
+	}
+
+	var req TriggerRunRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid request body", err.Error())
+		return
+	}
+
+	h.logger.Info("trigger run requested", "target", name, "run_id", req.RunID)
+
+	// Run the benchmark synchronously (this may take a while)
+	results, err := h.manager.TriggerRun(r.Context(), name, req.RunID)
+	if err != nil {
+		h.logger.Error("trigger run failed", "target", name, "error", err)
+		h.respondJSON(w, http.StatusOK, TriggerRunResponse{
+			Name:   name,
+			RunID:  req.RunID,
+			Status: "failed",
+			Error:  err.Error(),
+		})
+		return
+	}
+
+	h.respondJSON(w, http.StatusOK, TriggerRunResponse{
+		Name:    name,
+		RunID:   req.RunID,
+		Status:  "completed",
+		Results: results,
 	})
 }
 

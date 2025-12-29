@@ -34,6 +34,7 @@ func NewServer(cfg ServerConfig, manager TargetManager) *Server {
 	mux.HandleFunc("DELETE /api/targets/{name}", handlers.RemoveTarget)
 	mux.HandleFunc("POST /api/targets/{name}/start", handlers.StartTarget)
 	mux.HandleFunc("POST /api/targets/{name}/stop", handlers.StopTarget)
+	mux.HandleFunc("POST /api/targets/{name}/trigger", handlers.TriggerRun)
 	mux.HandleFunc("GET /api/targets/{name}/results", handlers.GetTargetResults)
 	mux.HandleFunc("GET /api/status", handlers.GetStatus)
 	mux.HandleFunc("GET /api/health", handlers.HealthCheck)
