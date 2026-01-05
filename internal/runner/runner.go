@@ -222,7 +222,7 @@ func (r *Runner) updateMetrics(labels map[string]string, results *parser.ParsedR
 	metrics.OutputTokensPerSecond.With(labels).Set(results.OutputTokensPerSec)
 	metrics.RequestsPerSecond.With(labels).Set(results.RequestsPerSec)
 
-	// Latency histograms
+	// Latency histograms - observe individual values if available
 	for _, v := range results.TTFTValues {
 		metrics.TimeToFirstToken.With(labels).Observe(v)
 	}
@@ -231,5 +231,73 @@ func (r *Runner) updateMetrics(labels map[string]string, results *parser.ParsedR
 	}
 	for _, v := range results.E2EValues {
 		metrics.EndToEndLatency.With(labels).Observe(v)
+	}
+
+	// If no individual values but we have distribution stats, observe synthetic samples
+	// based on the distribution percentiles to populate the histogram
+	if len(results.TTFTValues) == 0 && results.TTFTStats != nil && results.TTFTStats.Count > 0 {
+		observeFromDistribution(metrics.TimeToFirstToken.With(labels), results.TTFTStats, true)
+	}
+	if len(results.ITLValues) == 0 && results.ITLStats != nil && results.ITLStats.Count > 0 {
+		observeFromDistribution(metrics.InterTokenLatency.With(labels), results.ITLStats, true)
+	}
+	if len(results.E2EValues) == 0 && results.E2EStats != nil && results.E2EStats.Count > 0 {
+		// E2E latency is already in seconds, no conversion needed
+		observeFromDistribution(metrics.EndToEndLatency.With(labels), results.E2EStats, false)
+	}
+}
+
+// observeFromDistribution generates synthetic observations from distribution statistics
+// to populate Prometheus histograms when individual request data is not available.
+// If msToSec is true, converts millisecond values to seconds.
+func observeFromDistribution(observer interface{ Observe(float64) }, stats *parser.DistributionSummary, msToSec bool) {
+	if stats == nil || stats.Count == 0 {
+		return
+	}
+
+	// Conversion factor: 1/1000 for ms->s, 1 for already in seconds
+	conv := 1.0
+	if msToSec {
+		conv = 0.001
+	}
+
+	// Generate observations weighted by their percentile ranges to approximate the distribution
+	// This provides a reasonable approximation for histogram bucket population
+	percentilePoints := []struct {
+		value  float64
+		weight int // how many observations to emit for this percentile range
+	}{
+		{stats.Percentiles.P01, 1},  // 0-1%: 1% of data
+		{stats.Percentiles.P05, 4},  // 1-5%: 4% of data
+		{stats.Percentiles.P10, 5},  // 5-10%: 5% of data
+		{stats.Percentiles.P25, 15}, // 10-25%: 15% of data
+		{stats.Percentiles.P50, 25}, // 25-50%: 25% of data
+		{stats.Percentiles.P75, 25}, // 50-75%: 25% of data
+		{stats.Percentiles.P90, 15}, // 75-90%: 15% of data
+		{stats.Percentiles.P95, 5},  // 90-95%: 5% of data
+		{stats.Percentiles.P99, 4},  // 95-99%: 4% of data
+		{stats.Percentiles.P999, 1}, // 99-99.9%: ~1% of data
+	}
+
+	// Scale weights to match actual count
+	totalWeight := 0
+	for _, p := range percentilePoints {
+		totalWeight += p.weight
+	}
+
+	// Observe each percentile value weighted proportionally
+	for _, p := range percentilePoints {
+		if p.value <= 0 {
+			continue
+		}
+		// Calculate how many observations for this percentile
+		numObs := (p.weight * stats.Count) / totalWeight
+		if numObs < 1 {
+			numObs = 1
+		}
+		valueInSeconds := p.value * conv
+		for i := 0; i < numObs; i++ {
+			observer.Observe(valueInSeconds)
+		}
 	}
 }
