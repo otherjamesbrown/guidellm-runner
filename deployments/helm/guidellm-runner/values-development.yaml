@@ -45,12 +45,14 @@ config:
           maxSeconds: 60
         # TRT-LLM has ~27s response time (7x slower than vLLM on same GPU)
         # Use lower rate and longer window to avoid request cancellations
+        # Note: TRT-LLM only supports chat_completions (not text_completions)
         # TODO: aas-yx5pv - Investigate TRT-LLM performance vs vLLM
         - name: llama-3-1-8b-instruct-trtllm
           url: https://api.dev.otherjamesbrown.com
           model: llama-3-1-8b-instruct-trtllm
           rate: 0.2
           maxSeconds: 120
+          requestType: chat_completions
 
 resources:
   limits:

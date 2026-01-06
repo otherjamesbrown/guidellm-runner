@@ -23,6 +23,9 @@ data:
             {{- if .maxSeconds }}
             max_seconds: {{ .maxSeconds }}
             {{- end }}
+            {{- if .requestType }}
+            request_type: {{ .requestType }}
+            {{- end }}
           {{- end }}
       {{- end }}
 
