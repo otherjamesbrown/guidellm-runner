@@ -25,17 +25,19 @@ config:
     # (synthetic format needs model-specific tokenizer which may not be available)
     dataSpec: "type=emulated,tokenizer=gpt2,prompt_tokens=256,output_tokens=128"
 
-  # NOTE: Model IDs must match /v1/models endpoint, not HuggingFace IDs
-  # Run: curl -s https://api.dev.otherjamesbrown.com/v1/models | jq '.data[].id'
+  # NOTE: Model IDs can be either short names or HuggingFace paths depending on
+  # how the api-router is configured. Test with curl before adding.
   # TODO: aas-yirci - Auto-discover models from /v1/models endpoint
   environments:
     development:
       targets:
+        # unsloth requires HuggingFace path format
         - name: unsloth-gpt-oss-20b
           url: https://api.dev.otherjamesbrown.com
-          model: unsloth-gpt-oss-20b
+          model: unsloth/gpt-oss-20b
           rate: 1
           maxSeconds: 60
+        # llama models work with short names
         - name: llama-3-1-8b-instruct-vllm
           url: https://api.dev.otherjamesbrown.com
           model: llama-3-1-8b-instruct-vllm
