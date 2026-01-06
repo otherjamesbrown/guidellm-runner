@@ -8,15 +8,15 @@ import (
 
 // AddTargetRequest is the request body for adding a new target
 type AddTargetRequest struct {
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	Model       string `json:"model"`
-	Environment string `json:"environment,omitempty"` // defaults to "dynamic"
-	APIKey      string `json:"api_key,omitempty"`
-	Profile     string `json:"profile,omitempty"`
-	Rate        *int   `json:"rate,omitempty"`
-	MaxSeconds  *int   `json:"max_seconds,omitempty"`
-	RequestType string `json:"request_type,omitempty"` // chat_completions or text_completions
+	Name        string   `json:"name"`
+	URL         string   `json:"url"`
+	Model       string   `json:"model"`
+	Environment string   `json:"environment,omitempty"` // defaults to "dynamic"
+	APIKey      string   `json:"api_key,omitempty"`
+	Profile     string   `json:"profile,omitempty"`
+	Rate        *float64 `json:"rate,omitempty"`
+	MaxSeconds  *int     `json:"max_seconds,omitempty"`
+	RequestType string   `json:"request_type,omitempty"` // chat_completions or text_completions
 }
 
 // TargetStatus represents the current state of a target
@@ -36,7 +36,7 @@ type TargetResponse struct {
 	Environment string                 `json:"environment"`
 	Status      TargetStatus           `json:"status"`
 	Profile     string                 `json:"profile,omitempty"`
-	Rate        int                    `json:"rate,omitempty"`
+	Rate        float64                `json:"rate,omitempty"`
 	MaxSeconds  int                    `json:"max_seconds,omitempty"`
 	RequestType string                 `json:"request_type,omitempty"`
 	LastRunAt   *time.Time             `json:"last_run_at,omitempty"`

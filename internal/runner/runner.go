@@ -182,7 +182,7 @@ func (r *Runner) buildArgs(target config.Target, outputDir string, apiKey string
 		"--target", target.URL,
 		"--model", target.Model,
 		"--profile", target.GetProfile(r.cfg.Defaults),
-		"--rate", fmt.Sprintf("%d", target.GetRate(r.cfg.Defaults)),
+		"--rate", fmt.Sprintf("%g", target.GetRate(r.cfg.Defaults)),
 		"--max-seconds", fmt.Sprintf("%d", target.GetMaxSeconds(r.cfg.Defaults)),
 		"--data", r.cfg.Defaults.DataSpec,
 		"--output-dir", outputDir,

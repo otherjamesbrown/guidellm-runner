@@ -237,7 +237,7 @@ func TestBuildArgsWithDefaults(t *testing.T) {
 				URL:        "http://override:8000/v1",
 				Model:      "override-model",
 				Profile:    "poisson",
-				Rate:       intPtr(5),
+				Rate:       floatPtr(5.0),
 				MaxSeconds: intPtr(60),
 			},
 			expected: map[string]string{
@@ -374,4 +374,9 @@ func TestRequestTypeConfiguration(t *testing.T) {
 // Helper function to create int pointer
 func intPtr(i int) *int {
 	return &i
+}
+
+// Helper function to create float64 pointer
+func floatPtr(f float64) *float64 {
+	return &f
 }

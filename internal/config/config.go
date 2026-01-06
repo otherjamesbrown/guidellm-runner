@@ -28,21 +28,21 @@ type Target struct {
 	APIKey    string `yaml:"api_key,omitempty"`
 
 	// Per-target overrides (optional)
-	Profile     string `yaml:"profile,omitempty"`
-	Rate        *int   `yaml:"rate,omitempty"`
-	MaxSeconds  *int   `yaml:"max_seconds,omitempty"`
-	RequestType string `yaml:"request_type,omitempty"` // chat_completions or text_completions
+	Profile     string   `yaml:"profile,omitempty"`
+	Rate        *float64 `yaml:"rate,omitempty"`
+	MaxSeconds  *int     `yaml:"max_seconds,omitempty"`
+	RequestType string   `yaml:"request_type,omitempty"` // chat_completions or text_completions
 }
 
 // Defaults contains default benchmark settings
 type Defaults struct {
-	Profile     string `yaml:"profile"`
-	Rate        int    `yaml:"rate"`
-	Interval    int    `yaml:"interval"`     // seconds between benchmark runs
-	MaxSeconds  int    `yaml:"max_seconds"`  // duration per run
-	MaxTokens   int    `yaml:"max_tokens"`
-	DataSpec    string `yaml:"data_spec"`    // e.g., "prompt_tokens=256,output_tokens=128"
-	RequestType string `yaml:"request_type"` // chat_completions or text_completions
+	Profile     string  `yaml:"profile"`
+	Rate        float64 `yaml:"rate"`
+	Interval    int     `yaml:"interval"`     // seconds between benchmark runs
+	MaxSeconds  int     `yaml:"max_seconds"`  // duration per run
+	MaxTokens   int     `yaml:"max_tokens"`
+	DataSpec    string  `yaml:"data_spec"`    // e.g., "prompt_tokens=256,output_tokens=128"
+	RequestType string  `yaml:"request_type"` // chat_completions or text_completions
 }
 
 // PrometheusConfig contains Prometheus exporter settings
@@ -67,7 +67,7 @@ func Load(path string) (*Config, error) {
 		cfg.Defaults.Profile = "constant"
 	}
 	if cfg.Defaults.Rate == 0 {
-		cfg.Defaults.Rate = 1
+		cfg.Defaults.Rate = 1.0
 	}
 	if cfg.Defaults.Interval == 0 {
 		cfg.Defaults.Interval = 60
@@ -99,7 +99,7 @@ func (c *Config) GetInterval() time.Duration {
 }
 
 // GetRate returns the effective rate for a target
-func (t *Target) GetRate(defaults Defaults) int {
+func (t *Target) GetRate(defaults Defaults) float64 {
 	if t.Rate != nil {
 		return *t.Rate
 	}
