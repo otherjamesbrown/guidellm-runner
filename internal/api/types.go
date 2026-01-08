@@ -90,3 +90,24 @@ type TriggerRunResponse struct {
 	Results *parser.ParsedResults  `json:"results,omitempty"`
 	Error   string                 `json:"error,omitempty"`
 }
+
+// SchedulerState represents the current state of the scheduler
+type SchedulerState string
+
+const (
+	SchedulerStateRunning SchedulerState = "running"
+	SchedulerStatePaused  SchedulerState = "paused"
+)
+
+// SchedulerStatusResponse is the response for the scheduler status endpoint
+type SchedulerStatusResponse struct {
+	State            SchedulerState `json:"state"`
+	PausedAt         *time.Time     `json:"paused_at,omitempty"`
+	NextScheduledRun *time.Time     `json:"next_scheduled_run,omitempty"`
+}
+
+// SchedulerActionResponse is the response for scheduler pause/resume actions
+type SchedulerActionResponse struct {
+	State   SchedulerState `json:"state"`
+	Message string         `json:"message"`
+}

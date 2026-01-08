@@ -39,6 +39,12 @@ func NewServer(cfg ServerConfig, manager TargetManager) *Server {
 	mux.HandleFunc("GET /api/status", handlers.GetStatus)
 	mux.HandleFunc("GET /api/health", handlers.HealthCheck)
 
+	// Benchmark control routes
+	mux.HandleFunc("POST /api/v1/benchmark/pause", handlers.PauseBenchmark)
+	mux.HandleFunc("POST /api/v1/benchmark/resume", handlers.ResumeBenchmark)
+	mux.HandleFunc("POST /api/v1/benchmark/run", handlers.TriggerManualRun)
+	mux.HandleFunc("GET /api/v1/benchmark/status", handlers.GetBenchmarkStatus)
+
 	// Wrap with middleware
 	handler := loggingMiddleware(cfg.Logger, recoveryMiddleware(jsonContentTypeMiddleware(mux)))
 

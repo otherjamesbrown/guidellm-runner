@@ -21,6 +21,9 @@ type TargetManager interface {
 	GetTarget(name string) (*TargetResponse, bool)
 	GetStatus() StatusResponse
 	GetLatestResults(name string) (*parser.ParsedResults, bool)
+	PauseScheduler() error
+	ResumeScheduler() error
+	GetSchedulerStatus() SchedulerStatusResponse
 }
 
 // Handlers contains the HTTP handlers for the API
@@ -233,6 +236,99 @@ func (h *Handlers) GetStatus(w http.ResponseWriter, r *http.Request) {
 // HealthCheck handles GET /api/health
 func (h *Handlers) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	h.respondJSON(w, http.StatusOK, HealthResponse{Status: "ok"})
+}
+
+// PauseBenchmark handles POST /api/v1/benchmark/pause
+func (h *Handlers) PauseBenchmark(w http.ResponseWriter, r *http.Request) {
+	if err := h.manager.PauseScheduler(); err != nil {
+		h.respondError(w, http.StatusBadRequest, err.Error(), "")
+		return
+	}
+
+	h.respondJSON(w, http.StatusOK, SchedulerActionResponse{
+		State:   SchedulerStatePaused,
+		Message: "scheduler paused",
+	})
+}
+
+// ResumeBenchmark handles POST /api/v1/benchmark/resume
+func (h *Handlers) ResumeBenchmark(w http.ResponseWriter, r *http.Request) {
+	if err := h.manager.ResumeScheduler(); err != nil {
+		h.respondError(w, http.StatusBadRequest, err.Error(), "")
+		return
+	}
+
+	h.respondJSON(w, http.StatusOK, SchedulerActionResponse{
+		State:   SchedulerStateRunning,
+		Message: "scheduler resumed",
+	})
+}
+
+// GetBenchmarkStatus handles GET /api/v1/benchmark/status
+func (h *Handlers) GetBenchmarkStatus(w http.ResponseWriter, r *http.Request) {
+	status := h.manager.GetSchedulerStatus()
+	h.respondJSON(w, http.StatusOK, status)
+}
+
+// TriggerManualRun handles POST /api/v1/benchmark/run
+// Triggers immediate manual runs for all active targets
+func (h *Handlers) TriggerManualRun(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RunID  string `json:"run_id"`
+		Target string `json:"target,omitempty"` // Optional: run specific target only
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondError(w, http.StatusBadRequest, "invalid request body", err.Error())
+		return
+	}
+
+	// If target is specified, run that target only
+	if req.Target != "" {
+		results, err := h.manager.TriggerRun(r.Context(), req.Target, req.RunID)
+		if err != nil {
+			if _, ok := h.manager.GetTarget(req.Target); !ok {
+				h.respondError(w, http.StatusNotFound, "target not found", "")
+				return
+			}
+			h.respondJSON(w, http.StatusOK, TriggerRunResponse{
+				Name:   req.Target,
+				RunID:  req.RunID,
+				Status: "failed",
+				Error:  err.Error(),
+			})
+			return
+		}
+
+		h.respondJSON(w, http.StatusOK, TriggerRunResponse{
+			Name:    req.Target,
+			RunID:   req.RunID,
+			Status:  "completed",
+			Results: results,
+		})
+		return
+	}
+
+	// Otherwise, trigger all running targets
+	targets := h.manager.ListTargets()
+	runningTargets := 0
+	for _, t := range targets {
+		if t.Status == TargetStatusRunning {
+			runningTargets++
+		}
+	}
+
+	if runningTargets == 0 {
+		h.respondError(w, http.StatusBadRequest, "no running targets to trigger", "")
+		return
+	}
+
+	// Trigger all running targets asynchronously
+	h.respondJSON(w, http.StatusAccepted, map[string]interface{}{
+		"message":         "manual run triggered for all running targets",
+		"run_id":          req.RunID,
+		"triggered_count": runningTargets,
+	})
 }
 
 // respondJSON writes a JSON response

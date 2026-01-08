@@ -9,6 +9,7 @@ import (
 
 	"github.com/yourorg/guidellm-runner/internal/api"
 	"github.com/yourorg/guidellm-runner/internal/config"
+	"github.com/yourorg/guidellm-runner/internal/metrics"
 	"github.com/yourorg/guidellm-runner/internal/parser"
 )
 
@@ -40,6 +41,15 @@ type TargetManager interface {
 
 	// GetLatestResults returns the latest benchmark results for a target
 	GetLatestResults(name string) (*parser.ParsedResults, bool)
+
+	// PauseScheduler pauses scheduled benchmark runs
+	PauseScheduler() error
+
+	// ResumeScheduler resumes scheduled benchmark runs
+	ResumeScheduler() error
+
+	// GetSchedulerStatus returns the current scheduler state
+	GetSchedulerStatus() api.SchedulerStatusResponse
 }
 
 // managedTarget holds runtime state for a target
@@ -54,17 +64,23 @@ type managedTarget struct {
 
 // DefaultTargetManager is the default implementation of TargetManager
 type DefaultTargetManager struct {
-	mu        sync.RWMutex
-	targets   map[string]*managedTarget
-	cfg       *config.Config
-	logger    *slog.Logger
-	runner    *Runner
-	startTime time.Time
-	wg        sync.WaitGroup
+	mu                sync.RWMutex
+	targets           map[string]*managedTarget
+	cfg               *config.Config
+	logger            *slog.Logger
+	runner            *Runner
+	startTime         time.Time
+	wg                sync.WaitGroup
+	schedulerPaused   bool
+	schedulerPausedAt *time.Time
+	autoResumeTimer   *time.Timer
 }
 
 // NewTargetManager creates a new DefaultTargetManager
 func NewTargetManager(cfg *config.Config, logger *slog.Logger) *DefaultTargetManager {
+	// Initialize metric to 0 (running)
+	metrics.SchedulerPaused.Set(0)
+
 	return &DefaultTargetManager{
 		targets:   make(map[string]*managedTarget),
 		cfg:       cfg,
@@ -271,6 +287,7 @@ func (m *DefaultTargetManager) GetLatestResults(name string) (*parser.ParsedResu
 
 // TriggerRun triggers an immediate benchmark run for a target
 // This runs synchronously and returns the results when complete
+// After a manual run, scheduled runs are auto-paused for 60 minutes
 func (m *DefaultTargetManager) TriggerRun(ctx context.Context, name string, runID string) (*parser.ParsedResults, error) {
 	m.mu.RLock()
 	mt, exists := m.targets[name]
@@ -296,6 +313,18 @@ func (m *DefaultTargetManager) TriggerRun(ctx context.Context, name string, runI
 
 	logger.Info("triggering manual benchmark run")
 
+	// Pause scheduler before manual run
+	m.mu.Lock()
+	wasAlreadyPaused := m.schedulerPaused
+	if !wasAlreadyPaused {
+		m.schedulerPaused = true
+		now := time.Now()
+		m.schedulerPausedAt = &now
+		metrics.SchedulerPaused.Set(1)
+		logger.Info("scheduler paused for manual run")
+	}
+	m.mu.Unlock()
+
 	// Run the benchmark synchronously
 	results := m.runner.runBenchmarkWithResults(ctx, envName, target, logger)
 
@@ -305,6 +334,29 @@ func (m *DefaultTargetManager) TriggerRun(ctx context.Context, name string, runI
 		now := time.Now()
 		mt.lastRunAt = &now
 		mt.lastResults = results
+	}
+
+	// Set up auto-resume timer (60 minutes) if scheduler was not already paused
+	if !wasAlreadyPaused {
+		// Cancel existing timer if any
+		if m.autoResumeTimer != nil {
+			m.autoResumeTimer.Stop()
+		}
+
+		m.autoResumeTimer = time.AfterFunc(60*time.Minute, func() {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+
+			if m.schedulerPaused {
+				m.schedulerPaused = false
+				m.schedulerPausedAt = nil
+				m.autoResumeTimer = nil
+				metrics.SchedulerPaused.Set(0)
+				m.logger.Info("scheduler auto-resumed after manual run delay")
+			}
+		})
+
+		logger.Info("scheduler will auto-resume in 60 minutes")
 	}
 	m.mu.Unlock()
 
@@ -415,7 +467,16 @@ func (m *DefaultTargetManager) runTargetLoop(ctx context.Context, name string) {
 			m.mu.Unlock()
 			return
 		case <-ticker.C:
-			m.runBenchmarkWithCallback(ctx, envName, target, logger, name)
+			// Check if scheduler is paused
+			m.mu.RLock()
+			paused := m.schedulerPaused
+			m.mu.RUnlock()
+
+			if !paused {
+				m.runBenchmarkWithCallback(ctx, envName, target, logger, name)
+			} else {
+				logger.Debug("skipping scheduled run (scheduler paused)")
+			}
 		}
 	}
 }
@@ -455,4 +516,94 @@ func (m *DefaultTargetManager) toTargetResponse(mt *managedTarget) api.TargetRes
 		LastRunAt:   mt.lastRunAt,
 		LastResults: mt.lastResults,
 	}
+}
+
+// PauseScheduler pauses all scheduled benchmark runs
+func (m *DefaultTargetManager) PauseScheduler() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.schedulerPaused {
+		return fmt.Errorf("scheduler is already paused")
+	}
+
+	// Cancel auto-resume timer if it exists
+	if m.autoResumeTimer != nil {
+		m.autoResumeTimer.Stop()
+		m.autoResumeTimer = nil
+	}
+
+	m.schedulerPaused = true
+	now := time.Now()
+	m.schedulerPausedAt = &now
+
+	// Update metrics
+	metrics.SchedulerPaused.Set(1)
+
+	m.logger.Info("scheduler paused")
+	return nil
+}
+
+// ResumeScheduler resumes all scheduled benchmark runs
+func (m *DefaultTargetManager) ResumeScheduler() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.schedulerPaused {
+		return fmt.Errorf("scheduler is not paused")
+	}
+
+	// Cancel auto-resume timer if it exists
+	if m.autoResumeTimer != nil {
+		m.autoResumeTimer.Stop()
+		m.autoResumeTimer = nil
+	}
+
+	m.schedulerPaused = false
+	m.schedulerPausedAt = nil
+
+	// Update metrics
+	metrics.SchedulerPaused.Set(0)
+
+	m.logger.Info("scheduler resumed")
+	return nil
+}
+
+// GetSchedulerStatus returns the current scheduler state
+func (m *DefaultTargetManager) GetSchedulerStatus() api.SchedulerStatusResponse {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var nextScheduledRun *time.Time
+	if !m.schedulerPaused {
+		// Calculate next scheduled run based on interval
+		for _, mt := range m.targets {
+			if mt.status == api.TargetStatusRunning && mt.lastRunAt != nil {
+				next := mt.lastRunAt.Add(m.cfg.GetInterval())
+				if nextScheduledRun == nil || next.Before(*nextScheduledRun) {
+					nextScheduledRun = &next
+				}
+			}
+		}
+
+		// If no last run, next run is now
+		if nextScheduledRun == nil {
+			now := time.Now()
+			nextScheduledRun = &now
+		}
+	}
+
+	return api.SchedulerStatusResponse{
+		State:            m.getSchedulerState(),
+		PausedAt:         m.schedulerPausedAt,
+		NextScheduledRun: nextScheduledRun,
+	}
+}
+
+// getSchedulerState returns the current scheduler state
+func (m *DefaultTargetManager) getSchedulerState() api.SchedulerState {
+	if m.schedulerPaused {
+		return api.SchedulerStatePaused
+	}
+	return api.SchedulerStateRunning
 }

@@ -129,6 +129,14 @@ var (
 		},
 		labels,
 	)
+
+	// Scheduler status
+	SchedulerPaused = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "guidellm_scheduler_paused",
+			Help: "Whether the scheduler is paused (1 = paused, 0 = running)",
+		},
+	)
 )
 
 // Labels returns a prometheus.Labels map for the given parameters
