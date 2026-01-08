@@ -81,6 +81,12 @@ func main() {
 	// Load targets from config
 	manager.LoadFromConfig()
 
+	// Load targets from discovery if enabled
+	if err := manager.LoadFromDiscovery(ctx); err != nil {
+		logger.Error("failed to load targets from discovery", "error", err)
+		// Continue with static targets on discovery failure
+	}
+
 	// Start Prometheus metrics server
 	go func() {
 		addr := fmt.Sprintf(":%d", cfg.Prometheus.Port)

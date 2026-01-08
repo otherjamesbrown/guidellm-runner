@@ -45,3 +45,12 @@ defaults:
 # Prometheus metrics server configuration
 prometheus:
   port: 9090
+
+# Model discovery - automatically discover and benchmark all text models
+discovery:
+  enabled: true
+  environments:
+    staging:
+      endpoint: https://api.staging.otherjamesbrown.com/v1/models
+      base_url: https://api.staging.otherjamesbrown.com/v1/chat/completions
+      api_key: ai-aas_omiFoO9a_omiFoO9aoda1_3RMMZT1kglJ7KFosxaHap2DS-Uffdc

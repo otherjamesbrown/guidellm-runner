@@ -9,6 +9,7 @@ import (
 
 	"github.com/yourorg/guidellm-runner/internal/api"
 	"github.com/yourorg/guidellm-runner/internal/config"
+	"github.com/yourorg/guidellm-runner/internal/discovery"
 	"github.com/yourorg/guidellm-runner/internal/metrics"
 	"github.com/yourorg/guidellm-runner/internal/parser"
 )
@@ -388,6 +389,67 @@ func (m *DefaultTargetManager) LoadFromConfig() {
 	}
 
 	m.logger.Info("loaded targets from config", "count", len(m.targets))
+}
+
+// LoadFromDiscovery discovers and loads targets dynamically from /v1/models endpoints
+func (m *DefaultTargetManager) LoadFromDiscovery(ctx context.Context) error {
+	if !m.cfg.Discovery.Enabled {
+		m.logger.Info("model discovery disabled")
+		return nil
+	}
+
+	discoveryClient := discovery.NewClient(m.logger)
+
+	for envName, envConfig := range m.cfg.Discovery.Environments {
+		m.logger.Info("discovering models for environment",
+			"environment", envName,
+			"endpoint", envConfig.Endpoint)
+
+		// Fetch models from API
+		models, err := discoveryClient.DiscoverModels(ctx, envConfig.Endpoint, envConfig.APIKey)
+		if err != nil {
+			m.logger.Error("failed to discover models",
+				"environment", envName,
+				"error", err)
+			continue
+		}
+
+		// Filter to text models only
+		textModels := discovery.FilterTextModels(models)
+		m.logger.Info("filtered to text models",
+			"environment", envName,
+			"total", len(models),
+			"text_models", len(textModels))
+
+		// Generate targets
+		targets := discovery.GenerateTargets(textModels, envConfig.BaseURL, envConfig.APIKey, envName)
+
+		// Add to manager
+		m.mu.Lock()
+		for _, target := range targets {
+			// Skip if target already exists (static config takes precedence)
+			if _, exists := m.targets[target.Name]; exists {
+				m.logger.Debug("target already exists, skipping",
+					"name", target.Name,
+					"environment", envName)
+				continue
+			}
+
+			m.targets[target.Name] = &managedTarget{
+				target:      target,
+				environment: envName,
+				status:      api.TargetStatusStopped,
+			}
+
+			m.logger.Info("discovered target added",
+				"name", target.Name,
+				"model", target.Model,
+				"environment", envName)
+		}
+		m.mu.Unlock()
+	}
+
+	return nil
 }
 
 // StartAllConfigured starts all targets loaded from configuration

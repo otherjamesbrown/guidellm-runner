@@ -13,6 +13,7 @@ type Config struct {
 	Environments map[string]Environment `yaml:"environments"`
 	Defaults     Defaults               `yaml:"defaults"`
 	Prometheus   PrometheusConfig       `yaml:"prometheus"`
+	Discovery    DiscoveryConfig        `yaml:"discovery,omitempty"`
 }
 
 // Environment represents a deployment environment (e.g., develop, staging)
@@ -48,6 +49,19 @@ type Defaults struct {
 // PrometheusConfig contains Prometheus exporter settings
 type PrometheusConfig struct {
 	Port int `yaml:"port"`
+}
+
+// DiscoveryConfig contains model discovery settings
+type DiscoveryConfig struct {
+	Enabled     bool                       `yaml:"enabled"`
+	Environments map[string]DiscoveryEnvConfig `yaml:"environments,omitempty"`
+}
+
+// DiscoveryEnvConfig contains environment-specific discovery settings
+type DiscoveryEnvConfig struct {
+	Endpoint string `yaml:"endpoint"`
+	BaseURL  string `yaml:"base_url"`
+	APIKey   string `yaml:"api_key,omitempty"`
 }
 
 // Load reads and parses the config file

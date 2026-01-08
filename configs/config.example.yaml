@@ -53,3 +53,18 @@ defaults:
 # Prometheus metrics server configuration
 prometheus:
   port: 9090
+
+# Model discovery configuration (optional)
+# When enabled, automatically discovers models from /v1/models endpoints
+# and creates benchmark targets for text generation models
+discovery:
+  enabled: false  # Set to true to enable auto-discovery
+  environments:
+    develop:
+      endpoint: http://api-router.develop.svc.cluster.local:8080/v1/models
+      base_url: http://api-router.develop.svc.cluster.local:8080/v1/chat/completions
+      api_key: ""  # Optional API key for authentication
+    staging:
+      endpoint: http://api-router.staging.svc.cluster.local:8080/v1/models
+      base_url: http://api-router.staging.svc.cluster.local:8080/v1/chat/completions
+      api_key: ""
