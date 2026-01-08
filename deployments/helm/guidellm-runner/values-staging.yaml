@@ -100,10 +100,10 @@ config:
 resources:
   limits:
     cpu: "2"
-    memory: 4Gi
+    memory: 8Gi  # Increased from 4Gi - 7 concurrent targets load tokenizers
   requests:
     cpu: 500m
-    memory: 2Gi
+    memory: 4Gi
 
 serviceMonitor:
   enabled: true
