@@ -66,8 +66,36 @@ config:
             runtime: trtllm
             gpu: rtx4000-ada
 
-        # Note: multi-model-3x8b-blackwell (Triton v2 protocol) cannot be
-        # benchmarked via OpenAI API - requires separate Triton benchmarking
+        # Multi-Model 3x8B Triton Ensembles (via OpenAI API translation)
+        - name: mm-blackwell-1-llama
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: mm-blackwell-1-llama
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: trtllm-triton
+            gpu: rtx6000-blackwell
+            ensemble: llama_ensemble
+
+        - name: mm-blackwell-1-mistral
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: mm-blackwell-1-mistral
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: trtllm-triton
+            gpu: rtx6000-blackwell
+            ensemble: mistral_ensemble
+
+        - name: mm-blackwell-1-qwen
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: mm-blackwell-1-qwen
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: trtllm-triton
+            gpu: rtx6000-blackwell
+            ensemble: qwen_ensemble
 
 resources:
   limits:
