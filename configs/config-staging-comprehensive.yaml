@@ -1,0 +1,71 @@
+# GuideLLM Runner Configuration for comprehensive staging benchmarks
+# Created: 2026-01-08
+# Bead: aas-gu71k
+
+environments:
+  staging:
+    targets:
+      # vLLM Models
+      - name: llama-3-1-8b-instruct-vllm-ada
+        url: https://api.staging.otherjamesbrown.com
+        model: llama-3-1-8b-instruct-vllm-ada
+        api_key: aas-master-staging-aHkHICegxiOoyKjfiMKUHJ5TJXi7nGQz
+        rate: 0.5  # Lower rate to avoid quotas
+        max_seconds: 20
+        profile: constant
+        max_tokens: 50
+        data_spec: "prompt_tokens=100,output_tokens=50"
+        notes: "vLLM on Ada GPU (RTX 4000)"
+
+      - name: unsloth-gpt-oss-20b
+        url: https://api.staging.otherjamesbrown.com
+        model: unsloth-gpt-oss-20b
+        api_key: aas-master-staging-aHkHICegxiOoyKjfiMKUHJ5TJXi7nGQz
+        rate: 0.5
+        max_seconds: 20
+        profile: constant
+        max_tokens: 50
+        data_spec: "prompt_tokens=100,output_tokens=50"
+        notes: "vLLM - unsloth/gpt-oss-20b (20B params)"
+
+      - name: qwen2-vl-7b-instruct
+        url: https://api.staging.otherjamesbrown.com
+        model: qwen2-vl-7b-instruct
+        api_key: aas-master-staging-aHkHICegxiOoyKjfiMKUHJ5TJXi7nGQz
+        rate: 0.5
+        max_seconds: 20
+        profile: constant
+        max_tokens: 50
+        data_spec: "prompt_tokens=100,output_tokens=50"
+        notes: "vLLM - Qwen2-VL 7B (vision-language model)"
+
+      # TRT-LLM Models (Ada)
+      - name: llama-3-1-8b-instruct-trtllm-ada
+        url: https://api.staging.otherjamesbrown.com
+        model: llama-3-1-8b-instruct-trtllm-ada
+        api_key: aas-master-staging-aHkHICegxiOoyKjfiMKUHJ5TJXi7nGQz
+        rate: 0.5
+        max_seconds: 20
+        profile: constant
+        max_tokens: 50
+        data_spec: "prompt_tokens=100,output_tokens=50"
+        notes: "TRT-LLM on Ada GPU (RTX 4000)"
+
+# Note: Triton multi-model ensembles (llama_ensemble, mistral_ensemble, qwen_ensemble)
+# cannot be benchmarked via OpenAI API - they use Triton v2 protocol only.
+# These require direct gRPC or HTTP requests to /v2/models/<ensemble>/infer endpoints.
+# See bead aas-gu71k for Triton-specific benchmark approach.
+
+# Default settings
+defaults:
+  profile: constant
+  rate: 0.5  # Conservative rate to avoid quota issues
+  interval: 300
+  max_seconds: 20
+  max_tokens: 50
+  data_spec: "prompt_tokens=100,output_tokens=50"
+  request_type: chat_completions
+
+# Prometheus metrics server configuration
+prometheus:
+  port: 9090
