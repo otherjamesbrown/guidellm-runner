@@ -1,4 +1,5 @@
 # Staging environment values for guidellm-runner
+# Updated: 2026-01-08 - All enabled staging models
 
 image:
   repository: ghcr.io/otherjamesbrown/ai-aas/guidellm-runner
@@ -17,32 +18,56 @@ config:
 
   defaults:
     profile: constant
-    rate: 1
+    rate: 0.5  # Conservative rate to avoid quota limits
     interval: 300  # Run benchmark every 5 minutes
-    maxSeconds: 60
-    maxTokens: 100
-    # Use emulated data with gpt2 tokenizer for text_completions
-    dataSpec: "type=emulated,tokenizer=gpt2,prompt_tokens=256,output_tokens=128"
+    maxSeconds: 30
+    maxTokens: 50
+    # Use emulated data with gpt2 tokenizer
+    dataSpec: "type=emulated,tokenizer=gpt2,prompt_tokens=100,output_tokens=50"
 
   environments:
     staging:
       targets:
+        # vLLM Models (OpenAI-compatible)
         - name: unsloth-gpt-oss-20b
-          # Use internal cluster DNS for better reliability
           url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
           model: unsloth/gpt-oss-20b
-          rate: 1
-          maxSeconds: 60
-        - name: openai-gpt-oss-20b
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: vllm
+            gpu: rtx6000-blackwell
+
+        - name: qwen2-vl-7b-instruct
           url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
-          model: openai/gpt-oss-20b
-          rate: 1
-          maxSeconds: 60
-        - name: mistral-7b
+          model: qwen2-vl-7b-instruct
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: tgi
+            gpu: rtx4000-ada
+
+        - name: llama-3-1-8b-instruct-vllm-ada
           url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
-          model: mistralai/Mistral-7B-Instruct-v0.3
-          rate: 1
-          maxSeconds: 60
+          model: llama-3.1-8b-instruct-ada
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: vllm
+            gpu: rtx4000-ada
+
+        # TRT-LLM Models (OpenAI-compatible via trtllm-serve)
+        - name: llama-3-1-8b-instruct-trtllm-ada
+          url: http://api-router-service-staging-api-router-service.staging.svc.cluster.local:8080
+          model: llama-3-1-8b-instruct-trtllm-ada
+          rate: 0.5
+          maxSeconds: 30
+          tags:
+            runtime: trtllm
+            gpu: rtx4000-ada
+
+        # Note: multi-model-3x8b-blackwell (Triton v2 protocol) cannot be
+        # benchmarked via OpenAI API - requires separate Triton benchmarking
 
 resources:
   limits:
